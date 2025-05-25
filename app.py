@@ -1,32 +1,38 @@
 from flask import Flask, redirect, url_for, render_template, request, Response
 import os
 import cv2
-import torch
-from matplotlib import pyplot as plt
-import numpy as np
+from ultralytics import YOLO
 
-model = torch.hub.load(
-    "ultralytics/yolov5",
-    "custom",
-    path="exp3/weights/last.pt",
-    force_reload=True,
-)
+MODEL_PATH = "D:/CodingStorage/Python/FlaskFyp2Detection/best.pt"  # Update with your YOLO model path
+model = YOLO(MODEL_PATH, task="detect")  # Explicitly specify the task
+
 app = Flask(__name__)
-camera = cv2.VideoCapture(0)
+camera = cv2.VideoCapture(0)  # Change the index if necessary
+
 
 def gen_frames():
     while True:
-        success, frame = camera.read()  # read the camera frame
+        success, frame = camera.read()  # Read the camera frame
         if not success:
+            print("Failed to capture frame from camera")
             break
         else:
+            print("Frame captured successfully")
+            # Perform inference
             results = model(frame)
-            detected_frame = np.squeeze(
-                results.render()
-            )  # Render detections on the frame
+            result = results[0]  # Assuming only one image is processed at a time
 
-            ret, buffer = cv2.imencode(".jpg", detected_frame)
+            # Use plot() to get the annotated image
+            annotated_frame = result.plot()
+
+            # Encode the annotated frame to JPEG
+            ret, buffer = cv2.imencode(".jpg", annotated_frame)
+            if not ret:
+                print("Failed to encode frame")
+                continue
             frame = buffer.tobytes()
+
+            # Yield the frame for streaming
             yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
 
@@ -41,5 +47,4 @@ def video():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
-    # app.run(port=int(os.environ.get("PORT", 8080)), host="0.0.0.0", debug=True)
+    app.run(port=int(os.environ.get("PORT", 8080)), host="0.0.0.0", debug=True)
